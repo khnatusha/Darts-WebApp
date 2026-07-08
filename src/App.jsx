@@ -28,6 +28,8 @@ const CHECKOUT_THROWS = (() => {
   const make = (prefix, factor, type) => Array.from({ length: 20 }, (_, i) => ({ label: `${prefix}${i + 1}`, value: (i + 1) * factor, type }));
   return [...make("T", 3, "treble"), ...make("D", 2, "double"), ...make("", 1, "single"), { label: "Bull", value: 50, type: "bull" }, { label: "Outer", value: 25, type: "outer" }];
 })();
+const CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, "Bull"];
+const DARTBOARD_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
 function Button({ children, className = "", disabled = false, ...props }) { return <button disabled={disabled} className={["inline-flex items-center justify-center transition active:scale-[0.98]", disabled ? "cursor-not-allowed opacity-60" : "", className].join(" ")} {...props}>{children}</button>; }
 function cx(...classes) { return classes.filter(Boolean).join(" "); }
 export function getNextIndex(currentIndex, playersCount, finishedIndexes = []) { if (playersCount <= 0) return 0; for (let step = 1; step <= playersCount; step++) { const next = (currentIndex + step) % playersCount; if (!finishedIndexes.includes(next)) return next; } return currentIndex; }
@@ -36,7 +38,14 @@ export function getThrowLabel(number, multiplier) { if (multiplier === "Miss") r
 export function createThrow(number, multiplier) { return { number, multiplier, value: getThrowValue(number, multiplier), label: getThrowLabel(number, multiplier) }; }
 export function createMissThrow() { return { number: 0, multiplier: "Miss", value: 0, label: "MISS" }; }
 export function appendThrow(currentThrows, nextThrow) { return currentThrows.length >= 3 ? currentThrows : [...currentThrows, nextThrow]; }
-export function buildInitialScores(players, startScore, inRule = "Straight in") { const remaining = Number(startScore) || 301; const opened = inRule === "Straight in"; return Object.fromEntries(players.map((p) => [p, { ...PLAYER_TEMPLATE, remaining, opened }])); }
+export function buildInitialScores(players, startScore, inRule = "Straight in", mode = "match") {
+  if (mode === "cricket") {
+    return Object.fromEntries(players.map((p) => [p, { ...PLAYER_TEMPLATE, remaining: 20, opened: true, cricketIndex: 0, cricketClosed: [] }]));
+  }
+  const remaining = Number(startScore) || 301;
+  const opened = inRule === "Straight in";
+  return Object.fromEntries(players.map((p) => [p, { ...PLAYER_TEMPLATE, remaining, opened }]));
+}
 function checkoutDifficulty(combo) { const preferred = { D20: 0, D16: 1, D12: 2, D10: 3, D8: 4, D6: 5, D4: 6, D3: 7, D2: 8, D1: 9, Bull: 20 }; const typeWeight = { single: 0, double: 2, treble: 3, outer: 8, bull: 15 }; const last = combo[combo.length - 1]; const bullPenalty = combo.some((x) => x.type === "bull" || x.type === "outer") && combo.length > 1 ? 12 : 0; return combo.length * 100 + (preferred[last.label] ?? 12) * 4 + bullPenalty + combo.reduce((s, x) => s + typeWeight[x.type], 0); }
 export function isOpeningThrow(dart, inRule = "Straight in") {
   if (!dart || inRule === "Straight in") return true;
@@ -106,7 +115,20 @@ export function evaluateTurn(playerScore, darts, inRule, outRule) {
 function placeNumber(place) { if (!place) return 999; const n = Number(String(place).replace(/[^0-9]/g, "")); return Number.isFinite(n) && n > 0 ? n : 999; }
 export function buildGameResult(players, scores) { const podiumSize = players.length > 5 ? 3 : players.length >= 3 ? 2 : 1; return players.map((p) => { const s = scores[p] || {}; return { player: p, remaining: Number.isFinite(Number(s.remaining)) ? Number(s.remaining) : 999, finishedPlace: s.finishedPlace || null, placeNumber: placeNumber(s.finishedPlace) }; }).sort((a, b) => a.placeNumber - b.placeNumber || a.remaining - b.remaining).slice(0, podiumSize).map((item, idx) => { const place = idx + 1; const points = players.length === 2 ? (place === 1 ? 1 : 0) : place === 1 ? 2 : place === 2 ? 1 : 0; return { ...item, place, points }; }); }
 export function buildScorecardRows(turnHistory, players) { const grouped = Object.fromEntries(players.map((p) => [p, []])); for (const turn of turnHistory) if (grouped[turn.player]) grouped[turn.player].push(turn); const rows = Math.max(0, ...Object.values(grouped).map((x) => x.length)); return Array.from({ length: rows }, (_, i) => ({ round: i + 1, cells: players.map((p) => grouped[p]?.[i] || null) })); }
-function runSelfTests() { console.assert(getNextIndex(0, 3, [1]) === 2); console.assert(getThrowValue(20, "Treble") === 60); console.assert(getThrowLabel(8, "Single") === "Single"); console.assert(appendThrow(appendThrow(appendThrow([], createMissThrow()), createMissThrow()), createMissThrow()).length === 3); console.assert(buildInitialScores(["A"], "301").A.remaining === 301); console.assert(getCheckoutOptions(40, "Double out")[0] === "D20"); console.assert(isBust(13, 13, "Double out", { multiplier: "Single" })); console.assert(isBust(21, 21, "Triple out", { multiplier: "Single" })); console.assert(isFinished(40, 40, { multiplier: "Double" }, "Double out")); console.assert(isFinished(21, 21, { multiplier: "Treble" }, "Triple out")); console.assert(getScoringDarts([createThrow(20,"Single"), createThrow(16,"Double")], false, "Double in").scoringDarts.length === 1); console.assert(buildGameResult(["A", "B"], { A: { remaining: 0, finishedPlace: "1st" }, B: { remaining: 20 } })[0].points === 1); console.assert(buildScorecardRows([{ player: "A" }, { player: "B" }, { player: "A" }], ["A", "B"]).length === 2); }
+export function getCricketTarget(playerScore = {}) {
+  return CRICKET_TARGETS[playerScore.cricketIndex || 0] ?? null;
+}
+export function isCricketHit(target, requiredTarget) {
+  if (!requiredTarget) return false;
+  if (requiredTarget === "Bull") return target === "Bull" || target === "Outer";
+  return Number(target) === Number(requiredTarget);
+}
+export function getCricketProgressLabel(playerScore = {}) {
+  const target = getCricketTarget(playerScore);
+  if (!target) return "Done";
+  return target === "Bull" ? "Bull / Outer" : String(target);
+}
+function runSelfTests() { console.assert(getNextIndex(0, 3, [1]) === 2); console.assert(getThrowValue(20, "Treble") === 60); console.assert(getThrowLabel(8, "Single") === "Single"); console.assert(appendThrow(appendThrow(appendThrow([], createMissThrow()), createMissThrow()), createMissThrow()).length === 3); console.assert(buildInitialScores(["A"], "301").A.remaining === 301); console.assert(buildInitialScores(["A"], "301", "Straight in", "cricket").A.remaining === 20); console.assert(isCricketHit("Outer", "Bull")); console.assert(getCheckoutOptions(40, "Double out")[0] === "D20"); console.assert(isBust(13, 13, "Double out", { multiplier: "Single" })); console.assert(isBust(21, 21, "Triple out", { multiplier: "Single" })); console.assert(isFinished(40, 40, { multiplier: "Double" }, "Double out")); console.assert(isFinished(21, 21, { multiplier: "Treble" }, "Triple out")); console.assert(getScoringDarts([createThrow(20,"Single"), createThrow(16,"Double")], false, "Double in").scoringDarts.length === 1); console.assert(buildGameResult(["A", "B"], { A: { remaining: 0, finishedPlace: "1st" }, B: { remaining: 20 } })[0].points === 1); console.assert(buildScorecardRows([{ player: "A" }, { player: "B" }, { player: "A" }], ["A", "B"]).length === 2); }
 if (typeof window !== "undefined") runSelfTests();
 
 function ruleCode(rule, kind) {
@@ -134,7 +156,7 @@ export default function DartsGameApp() {
   const [turnHistory, setTurnHistory] = useState([]);
   const activeMode = useMemo(() => MODES.find((m) => m.id === selectedMode) || MODES[0], [selectedMode]);
   const currentPlayer = throwOrder[currentIndex] || throwOrder[0] || "";
-  const currentScore = scores[currentPlayer] || { ...PLAYER_TEMPLATE, remaining: Number(score) || 301, opened: inRule === "Straight in" };
+  const currentScore = scores[currentPlayer] || (selectedMode === "cricket" ? { ...PLAYER_TEMPLATE, remaining: 20, opened: true, cricketIndex: 0, cricketClosed: [] } : { ...PLAYER_TEMPLATE, remaining: Number(score) || 301, opened: inRule === "Straight in" });
   const roundTotal = useMemo(() => roundInput.reduce((sum, d) => sum + d.value, 0), [roundInput]);
   const liveTurn = evaluateTurn(currentScore, roundInput, inRule, outRule);
   const liveRemaining = liveTurn.remainingAfter;
@@ -145,8 +167,67 @@ export default function DartsGameApp() {
   const startGame = () => { if (selectedPlayers.length < 2) return; setThrowOrder(selectedPlayers); setScores(buildInitialScores(selectedPlayers, score, inRule)); resetTurnState(); setScreen("order"); };
   const movePlayer = (from, to) => { if (from === to || from < 0 || to < 0) return; setThrowOrder((cur) => { const next = [...cur]; const [removed] = next.splice(from, 1); next.splice(to, 0, removed); return next; }); };
   const handleDrop = (target) => { if (!draggedPlayer || draggedPlayer === target) return; movePlayer(throwOrder.indexOf(draggedPlayer), throwOrder.indexOf(target)); setDraggedPlayer(null); };
-  const confirmThrowOrder = () => { setScores(buildInitialScores(throwOrder, score, inRule)); resetTurnState(); setScreen("playing"); };
+  const confirmThrowOrder = () => { setScores(buildInitialScores(throwOrder, score, inRule, selectedMode)); resetTurnState(); setScreen("playing"); };
   const addThrow = (num, mult = multiplier) => setRoundInput((cur) => appendThrow(cur, createThrow(num, mult)));
+  const handleCricketHit = (target) => {
+    if (selectedMode !== "cricket" || !currentPlayer || scores[currentPlayer]?.finishedPlace) return;
+    const requiredTarget = getCricketTarget(currentScore);
+    if (!isCricketHit(target, requiredTarget)) return;
+
+    const existingFinished = Object.values(scores).filter((x) => x.finishedPlace).length;
+    const finished = requiredTarget === "Bull";
+    const finishedPlace = finished ? FINISHING_PLACES[existingFinished] || `${existingFinished + 1}th` : null;
+    const nextIndex = (currentScore.cricketIndex || 0) + 1;
+    const nextTarget = CRICKET_TARGETS[nextIndex] ?? 0;
+    const nextScores = {
+      ...scores,
+      [currentPlayer]: {
+        ...currentScore,
+        remaining: finished ? 0 : nextTarget,
+        lastScore: target,
+        dartsThrown: currentScore.dartsThrown + 1,
+        totalScored: currentScore.totalScored + 1,
+        cricketIndex: nextIndex,
+        cricketClosed: [...(currentScore.cricketClosed || []), requiredTarget],
+        finishedPlace: finishedPlace || currentScore.finishedPlace,
+      },
+    };
+    const turn = {
+      id: `${Date.now()}-${currentPlayer}`,
+      turn: turnHistory.length + 1,
+      player: currentPlayer,
+      darts: [{ number: target, multiplier: "Cricket", value: 1, label: String(target) }],
+      total: 1,
+      attemptedTotal: 1,
+      result: finished ? finishedPlace : "OK",
+      before: requiredTarget,
+      after: finished ? "Done" : nextTarget,
+    };
+    const finishedIndexes = throwOrder.map((p, i) => nextScores[p]?.finishedPlace ? i : null).filter((i) => i !== null);
+    setTurnHistory((cur) => [...cur, turn]);
+    setScores(nextScores);
+    setRoundInput([]);
+    if (finishedIndexes.length >= throwOrder.length) { setScreen("result"); return; }
+    setCurrentIndex((i) => getNextIndex(i, throwOrder.length, finishedIndexes));
+  };
+  const handleCricketMiss = () => {
+    if (selectedMode !== "cricket" || !currentPlayer || scores[currentPlayer]?.finishedPlace) return;
+    const requiredTarget = getCricketTarget(currentScore);
+    const turn = {
+      id: `${Date.now()}-${currentPlayer}`,
+      turn: turnHistory.length + 1,
+      player: currentPlayer,
+      darts: [createMissThrow()],
+      total: 0,
+      attemptedTotal: 0,
+      result: "MISS",
+      before: requiredTarget,
+      after: requiredTarget,
+    };
+    const finishedIndexes = throwOrder.map((p, i) => scores[p]?.finishedPlace ? i : null).filter((i) => i !== null);
+    setTurnHistory((cur) => [...cur, turn]);
+    setCurrentIndex((i) => getNextIndex(i, throwOrder.length, finishedIndexes));
+  };
   const submitRound = () => {
     if (!currentPlayer || scores[currentPlayer]?.finishedPlace) return;
     const darts = roundInput.length ? roundInput : [createMissThrow()];
@@ -167,7 +248,7 @@ export default function DartsGameApp() {
     setCurrentIndex((i) => getNextIndex(i, throwOrder.length, finishedIndexes));
   };
   const shell = `mx-auto min-h-screen ${layout === "landscape" ? "max-w-5xl" : "max-w-md"} bg-gradient-to-b from-[#07130f] via-[#0d231a] to-[#07130f] px-5 pb-8 pt-6 shadow-2xl`;
-  return <div className="min-h-screen bg-[#07130f] text-white"><div className={shell}>{screen === "modes" && <ModesScreen layout={layout} onLayout={setLayout} onMode={openMode} />}{screen === "setup" && <SetupScreen layout={layout} activeMode={activeMode} players={players} selectedPlayers={selectedPlayers} selectedMode={selectedMode} score={score} inRule={inRule} outRule={outRule} guestName={guestName} showGuestInput={showGuestInput} onBack={() => setScreen("modes")} onShowGuest={() => setShowGuestInput(true)} onGuestName={setGuestName} onAddGuest={addGuest} onTogglePlayer={togglePlayer} onScore={setScore} onInRule={setInRule} onOutRule={setOutRule} onStart={startGame} />}{screen === "order" && <OrderScreen throwOrder={throwOrder} onDragStart={setDraggedPlayer} onDrop={handleDrop} onBack={() => setScreen("setup")} onConfirm={confirmThrowOrder} />}{screen === "playing" && <PlayingScreen layout={layout} activeMode={activeMode} selectedMode={selectedMode} score={score} inRule={inRule} outRule={outRule} throwOrder={throwOrder} currentPlayer={currentPlayer} currentScore={currentScore} liveRemaining={liveRemaining} scores={scores} multiplier={multiplier} roundInput={roundInput} roundTotal={roundTotal} onBack={() => setScreen("order")} onAddThrow={addThrow} onSubmit={submitRound} onUndo={() => setRoundInput((cur) => cur.slice(0, -1))} onMiss={() => setRoundInput((cur) => appendThrow(cur, createMissThrow()))} onMultiplier={setMultiplier} onToggleLayout={() => setLayout((cur) => cur === "portrait" ? "landscape" : "portrait")} onOpenScorecard={() => setScreen("scorecard")} onEndGame={() => setScreen("result")} />}{screen === "scorecard" && <ScorecardScreen players={throwOrder} turnHistory={turnHistory} onBack={() => setScreen("playing")} />}{screen === "result" && <ResultScreen players={throwOrder} scores={scores} onBack={() => setScreen("playing")} onMainMenu={() => setScreen("modes")} />}</div></div>;
+  return <div className="min-h-screen bg-[#07130f] text-white"><div className={shell}>{screen === "modes" && <ModesScreen layout={layout} onLayout={setLayout} onMode={openMode} />}{screen === "setup" && <SetupScreen layout={layout} activeMode={activeMode} players={players} selectedPlayers={selectedPlayers} selectedMode={selectedMode} score={score} inRule={inRule} outRule={outRule} guestName={guestName} showGuestInput={showGuestInput} onBack={() => setScreen("modes")} onShowGuest={() => setShowGuestInput(true)} onGuestName={setGuestName} onAddGuest={addGuest} onTogglePlayer={togglePlayer} onScore={setScore} onInRule={setInRule} onOutRule={setOutRule} onStart={startGame} />}{screen === "order" && <OrderScreen throwOrder={throwOrder} onDragStart={setDraggedPlayer} onDrop={handleDrop} onBack={() => setScreen("setup")} onConfirm={confirmThrowOrder} />}{screen === "playing" && <PlayingScreen layout={layout} activeMode={activeMode} selectedMode={selectedMode} score={score} inRule={inRule} outRule={outRule} throwOrder={throwOrder} currentPlayer={currentPlayer} currentScore={currentScore} liveRemaining={liveRemaining} scores={scores} multiplier={multiplier} roundInput={roundInput} roundTotal={roundTotal} onBack={() => setScreen("order")} onAddThrow={addThrow} onCricketHit={handleCricketHit} onSubmit={submitRound} onUndo={() => setRoundInput((cur) => cur.slice(0, -1))} onMiss={() => selectedMode === "cricket" ? handleCricketMiss() : setRoundInput((cur) => appendThrow(cur, createMissThrow()))} onMultiplier={setMultiplier} onToggleLayout={() => setLayout((cur) => cur === "portrait" ? "landscape" : "portrait")} onOpenScorecard={() => setScreen("scorecard")} onEndGame={() => setScreen("result")} />}{screen === "scorecard" && <ScorecardScreen players={throwOrder} turnHistory={turnHistory} onBack={() => setScreen("playing")} />}{screen === "result" && <ResultScreen players={throwOrder} scores={scores} onBack={() => setScreen("playing")} onMainMenu={() => setScreen("modes")} />}</div></div>;
 }
 function Header({ title, onBack, right }) { return <header className="mb-6 flex items-center justify-between">{onBack ? <button onClick={onBack} className="rounded-xl p-2 text-white/90"><ArrowLeft size={31}/></button> : <div className="w-11"/>}<h1 className="text-center font-black uppercase tracking-tight" style={{fontSize:34,lineHeight:1}}>{title}</h1>{right || <div className="w-11"/>}</header>; }
 function ModesScreen({ layout, onLayout, onMode }) { return <><Header title={TEXT.newGame}/><section className="mb-6 rounded-[24px] bg-[#0b1a14]/95 p-4 shadow-xl"><SettingGroup label={TEXT.orientation}><Segmented items={["portrait","landscape"]} labels={{portrait:TEXT.portrait,landscape:TEXT.landscape}} value={layout} onChange={onLayout}/></SettingGroup></section><motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} className="space-y-4">{MODES.map((m,i)=><motion.button key={m.id} initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{delay:i*.04}} onClick={()=>onMode(m.id)} className={cx("group flex w-full items-center justify-between rounded-[24px] px-7 py-6 text-left shadow-xl transition active:scale-[0.98]",m.id==="match"?"bg-blue-600 ring-4 ring-blue-400/60":"bg-[#0b1a14]/95 hover:bg-[#11261d]")}><div><div className="font-black uppercase tracking-tight" style={{fontSize:36,lineHeight:.9}}>{m.title}</div><div className="mt-2 text-sm font-medium text-white/60">{m.subtitle}</div></div><ArrowRight className="transition group-hover:translate-x-1" size={37} strokeWidth={2.4}/></motion.button>)}</motion.div></>; }
@@ -176,7 +257,112 @@ function PlayerPanel({ players, selectedPlayers, guestName, showGuestInput, onTo
 function SettingsPanel({ selectedMode, activeMode, score, inRule, outRule, onScore, onInRule, onOutRule }) { return <section className="rounded-[24px] bg-[#0b1a14]/95 p-5 shadow-xl"><div className="mb-5 flex items-center gap-3"><Settings2 size={27}/><h2 className="font-black uppercase" style={{fontSize:32,lineHeight:1}}>{TEXT.settings}</h2></div>{selectedMode === "match" ? <><Segmented items={X01_SCORES} value={score} onChange={onScore}/><Segmented items={IN_RULES} value={inRule} onChange={onInRule} className="mt-5"/><Segmented items={OUT_RULES} value={outRule} onChange={onOutRule} className="mt-5"/></> : <div className="rounded-[18px] bg-[#203829] p-4"><p className="text-sm font-bold text-white/55">{TEXT.selectedMode}</p><p className="mt-1 text-2xl font-black">{activeMode.title}</p></div>}</section>; }
 function OrderScreen({ throwOrder, onDragStart, onDrop, onBack, onConfirm }) { return <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}><Header title={TEXT.orderTitle} onBack={onBack}/><section className="mb-5 rounded-[28px] bg-[#11271d]/95 p-5 shadow-xl"><p className="mb-4 text-center text-sm font-bold uppercase text-white/55">{TEXT.orderHelp}</p><div className="space-y-3">{throwOrder.map((p,i)=><PlayerOrderRow key={p} player={p} index={i} onDragStart={onDragStart} onDrop={onDrop}/>)}</div></section><section className="mb-5 rounded-[28px] bg-[#0b1a14]/95 p-5 text-center shadow-xl"><div className="mx-auto mb-3 flex h-28 w-28 items-center justify-center rounded-full border-[12px] border-orange-400 bg-[#d9f3ef] text-5xl font-black text-black">{throwOrder[0]?.charAt(0)}</div><h2 className="font-black uppercase" style={{fontSize:30,lineHeight:1}}>{throwOrder[0]} starts</h2></section><Button onClick={onConfirm} className="h-16 w-full rounded-[24px] bg-blue-600 text-xl font-black uppercase text-white hover:bg-blue-500">{TEXT.confirm}</Button></motion.div>; }
 function PlayerOrderRow({ player, index, onDragStart, onDrop }) { return <div draggable onDragStart={()=>onDragStart(player)} onDragOver={(e)=>e.preventDefault()} onDrop={()=>onDrop(player)} className="flex cursor-grab items-center gap-4 rounded-[22px] bg-white p-4 text-black shadow-lg active:cursor-grabbing"><div className={cx("flex h-14 w-14 items-center justify-center rounded-2xl text-2xl font-black text-white",index===0?"bg-orange-400":index===1?"bg-slate-400":index===2?"bg-amber-700":"bg-[#203829]")}>{index+1}</div><div className="flex-1"><p className="text-xl font-black uppercase">{player}</p><p className="text-sm font-semibold text-black/50">{index===0?"Throws first":`Throws #${index+1}`}</p></div><GripVertical className="text-black/40" size={26}/></div>; }
-function PlayingScreen(props) { const avg=props.currentScore.dartsThrown?((props.currentScore.totalScored/props.currentScore.dartsThrown)*3).toFixed(2):"0.00"; const liveOpened = props.currentScore.opened || getScoringDarts(props.roundInput, Boolean(props.currentScore.opened), props.inRule).openedAfter; const outs=liveOpened?getCheckoutOptions(props.liveRemaining,props.outRule):[]; const land=props.layout==="landscape"; return <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}><Header title={props.selectedMode==="match"?`${props.score} ${TEXT.game} · ${ruleCode(props.inRule, "in")}/${ruleCode(props.outRule, "out")}`:props.activeMode.title} onBack={props.onBack} right={<PlayingHeaderActions {...props}/>}/><div className={land?"grid grid-cols-[1fr_1fr] gap-5":""}><div><PlayerScoreList {...props} avg={avg} checkoutOptions={outs}/><h2 className="mb-5 truncate whitespace-nowrap text-center text-[26px] font-black uppercase leading-none text-[#ff5a3a]">{props.currentPlayer}{TEXT.turn}</h2><RoundInputBar {...props}/></div><DartPad {...props}/></div></motion.div>; }
+function PlayingScreen(props) {
+  if (props.selectedMode === "cricket") return <CricketPlayingScreen {...props} />;
+
+  const avg=props.currentScore.dartsThrown?((props.currentScore.totalScored/props.currentScore.dartsThrown)*3).toFixed(2):"0.00";
+  const liveOpened = props.currentScore.opened || getScoringDarts(props.roundInput, Boolean(props.currentScore.opened), props.inRule).openedAfter;
+  const outs=liveOpened?getCheckoutOptions(props.liveRemaining,props.outRule):[];
+  const land=props.layout==="landscape";
+  return <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}><Header title={props.selectedMode==="match"?`${props.score} ${TEXT.game} · ${ruleCode(props.inRule, "in")}/${ruleCode(props.outRule, "out")}`:props.activeMode.title} onBack={props.onBack} right={<PlayingHeaderActions {...props}/>}/><div className={land?"grid grid-cols-[1fr_1fr] gap-5":""}><div><PlayerScoreList {...props} avg={avg} checkoutOptions={outs}/><h2 className="mb-5 truncate whitespace-nowrap text-center text-[26px] font-black uppercase leading-none text-[#ff5a3a]">{props.currentPlayer}{TEXT.turn}</h2><RoundInputBar {...props}/></div><DartPad {...props}/></div></motion.div>;
+}
+function CricketPlayingScreen(props) {
+  const land = props.layout === "landscape";
+  const requiredTarget = getCricketTarget(props.currentScore);
+  return (
+    <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}>
+      <Header title="Cricket" onBack={props.onBack} right={<PlayingHeaderActions {...props}/>} />
+      <div className={land ? "grid grid-cols-[0.9fr_1.1fr] gap-5" : "space-y-5"}>
+        <div>
+          <CricketScoreList {...props} />
+          <h2 className="mb-5 truncate whitespace-nowrap text-center text-[26px] font-black uppercase leading-none text-[#ff5a3a]">{props.currentPlayer}{TEXT.turn}</h2>
+          <section className="rounded-[28px] bg-white p-4 text-center text-black shadow-xl">
+            <div className="text-sm font-black uppercase text-black/50">Current target</div>
+            <div className="text-[64px] font-black leading-none">{requiredTarget === "Bull" ? "BULL" : requiredTarget}</div>
+            <div className="mt-2 text-sm font-bold text-black/50">{requiredTarget === "Bull" ? "Finish with Bull or Outer" : "Tap the matching sector on the board"}</div>
+          </section>
+        </div>
+        <CricketBoard currentScore={props.currentScore} onHit={props.onCricketHit} onMiss={props.onMiss} />
+      </div>
+    </motion.div>
+  );
+}
+function CricketScoreList({ throwOrder, scores, currentPlayer }) {
+  return (
+    <section className="mb-5 overflow-hidden rounded-[28px] bg-[#ff9f23] p-3 shadow-xl">
+      <div className="space-y-1">
+        {throwOrder.map((player) => {
+          const s = scores[player] || { ...PLAYER_TEMPLATE, remaining: 20, cricketIndex: 0, cricketClosed: [] };
+          const active = player === currentPlayer;
+          return (
+            <div key={player} className={cx("rounded-[22px] transition", active ? "bg-[#ff5a3a] p-4" : "bg-[#ff9f23] px-4 py-2")}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3"><Avatar name={player} active size={active?"sm":"xs"}/><span className={cx(active?"text-xl":"text-lg","font-black uppercase")}>{player}</span></div>
+                <div className="text-xl font-black text-white">{s.finishedPlace || getCricketProgressLabel(s)}</div>
+              </div>
+              {active && (
+                <div className="mt-3 grid grid-cols-7 gap-1">
+                  {CRICKET_TARGETS.map((target) => {
+                    const closed = (s.cricketClosed || []).includes(target);
+                    const current = getCricketTarget(s) === target;
+                    return <div key={target} className={cx("rounded-lg px-1 py-1 text-center text-[11px] font-black", closed ? "bg-[#10231b] text-[#ff5a3a] shadow-[0_0_12px_rgba(255,90,58,0.85)]" : current ? "bg-orange-400 text-black shadow-[0_0_14px_rgba(251,146,60,0.9)]" : "bg-black/15 text-white/40")}>{target}</div>
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+function CricketBoard({ currentScore, onHit, onMiss }) {
+  const requiredTarget = getCricketTarget(currentScore);
+  const closed = currentScore.cricketClosed || [];
+  return (
+    <section className="rounded-[28px] bg-[#0b1a14]/95 p-4 shadow-xl">
+      <div className="relative mx-auto aspect-square max-w-[520px] rounded-full border-[14px] border-[#1d2e25] bg-[#07130f]">
+        <div className="absolute left-1/2 top-1/2 h-[74%] w-[74%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
+        <div className="absolute left-1/2 top-1/2 h-[48%] w-[48%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
+        {DARTBOARD_ORDER.map((number, index) => {
+          const angle = (index / DARTBOARD_ORDER.length) * Math.PI * 2 - Math.PI / 2;
+          const radius = 41;
+          const left = 50 + Math.cos(angle) * radius;
+          const top = 50 + Math.sin(angle) * radius;
+          const isClosed = closed.includes(number);
+          const isCurrent = requiredTarget === number;
+          return (
+            <button
+              key={number}
+              onClick={() => onHit(number)}
+              className={cx(
+                "absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-xl font-black transition",
+                isClosed ? "bg-[#ff5a3a] text-white shadow-[0_0_22px_rgba(255,90,58,0.95)]" : isCurrent ? "bg-orange-400 text-black shadow-[0_0_24px_rgba(251,146,60,0.95)] scale-110" : "bg-[#10231b] text-white/75 hover:bg-white/10"
+              )}
+              style={{ left: `${left}%`, top: `${top}%` }}
+            >
+              {number}
+            </button>
+          );
+        })}
+        <button
+          onClick={() => onHit("Bull")}
+          className={cx(
+            "absolute left-1/2 top-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-sm font-black uppercase transition",
+            closed.includes("Bull") ? "bg-[#ff5a3a] text-white shadow-[0_0_24px_rgba(255,90,58,1)]" : requiredTarget === "Bull" ? "bg-orange-400 text-black shadow-[0_0_26px_rgba(251,146,60,1)]" : "bg-[#d9f3ef] text-black"
+          )}
+        >
+          Bull
+        </button>
+      </div>
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        <button onClick={onMiss} className="rounded-2xl bg-white/5 py-4 text-2xl font-black uppercase text-white">Miss</button>
+        <button onClick={() => onHit("Outer")} className="rounded-2xl bg-[#10231b] py-4 text-lg font-black text-white">Outer<span className="block text-sm text-white/55">finish</span></button>
+        <button onClick={() => onHit("Bull")} className="rounded-2xl bg-[#10231b] py-4 text-lg font-black text-white">Bull<span className="block text-sm text-white/55">finish</span></button>
+      </div>
+    </section>
+  );
+}
 function PlayingHeaderActions({ layout, onToggleLayout, onOpenScorecard, onEndGame }) { return <div className="flex items-center gap-2"><button onClick={onToggleLayout} className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-white/10 text-white/90 ring-1 ring-white/15 hover:bg-white/15" title={layout==="portrait"?TEXT.landscape:TEXT.portrait}><LayoutIcon target={layout==="portrait"?"landscape":"portrait"}/></button><button onClick={onOpenScorecard} className="rounded-xl p-2 text-white/90"><TableProperties size={25}/></button><button onClick={onEndGame} className="rounded-xl px-2 py-1 text-sm font-black text-white/80">{TEXT.end}</button></div>; }
 function PlayerScoreList({ throwOrder, scores, score, currentPlayer, liveRemaining, inRule, outRule, avg, checkoutOptions }) { return <section className="mb-5 overflow-hidden rounded-[28px] bg-[#ff9f23] p-3 shadow-xl"><div className="space-y-1">{throwOrder.map((p)=>{const s=scores[p]||{...PLAYER_TEMPLATE,remaining:Number(score)||301}; const active=p===currentPlayer; const remaining=active?liveRemaining:s.remaining; const outs=active?checkoutOptions:(s.opened ? getCheckoutOptions(s.remaining,outRule) : []); return <PlayerScoreRow key={p} player={p} score={s} active={active} remaining={remaining} avg={avg} outs={outs}/>})}</div></section>; }
 function PlayerScoreRow({ player, score, active, remaining, avg, outs }) { return <div className={cx("rounded-[22px] transition",active?"bg-[#ff5a3a] p-4":"bg-[#ff9f23] px-4 py-1.5")}><div className={cx(active?"mb-3":"mb-0","flex items-center justify-between gap-3")}><div className="flex items-center gap-3"><Avatar name={player} active size={active?"sm":"xs"}/><span className={cx(active?"text-xl":"text-lg","font-black uppercase")}>{player}</span></div>{!active&&<div className="text-xl font-black text-white">{score.finishedPlace||score.remaining}</div>}</div>{active&&<ActivePlayerDetails score={score} remaining={remaining} avg={avg} outs={outs}/>}</div>; }
