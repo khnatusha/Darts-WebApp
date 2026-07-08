@@ -128,6 +128,31 @@ export function getCricketProgressLabel(playerScore = {}) {
   if (!target) return "Done";
   return target === "Bull" ? "Bull / Outer" : String(target);
 }
+export function createCricketThrow(target, requiredTarget) {
+  const hit = isCricketHit(target, requiredTarget);
+  const label = target === "Outer" ? "Outer" : target === "Bull" ? "Bull" : String(target);
+  return { number: target, multiplier: "Cricket", value: hit ? 1 : 0, label, hit, requiredTarget };
+}
+export function getLiveCricketState(playerScore = {}, darts = []) {
+  let cricketIndex = playerScore.cricketIndex || 0;
+  const closed = [...(playerScore.cricketClosed || [])];
+
+  for (const dart of darts) {
+    const requiredTarget = CRICKET_TARGETS[cricketIndex];
+    if (!requiredTarget) break;
+    if (dart.hit || isCricketHit(dart.number, requiredTarget)) {
+      closed.push(requiredTarget);
+      cricketIndex += 1;
+    }
+  }
+
+  return {
+    cricketIndex,
+    closed,
+    currentTarget: CRICKET_TARGETS[cricketIndex] ?? null,
+    done: cricketIndex >= CRICKET_TARGETS.length,
+  };
+}
 function runSelfTests() { console.assert(getNextIndex(0, 3, [1]) === 2); console.assert(getThrowValue(20, "Treble") === 60); console.assert(getThrowLabel(8, "Single") === "Single"); console.assert(appendThrow(appendThrow(appendThrow([], createMissThrow()), createMissThrow()), createMissThrow()).length === 3); console.assert(buildInitialScores(["A"], "301").A.remaining === 301); console.assert(buildInitialScores(["A"], "301", "Straight in", "cricket").A.remaining === 20); console.assert(isCricketHit("Outer", "Bull")); console.assert(getCheckoutOptions(40, "Double out")[0] === "D20"); console.assert(isBust(13, 13, "Double out", { multiplier: "Single" })); console.assert(isBust(21, 21, "Triple out", { multiplier: "Single" })); console.assert(isFinished(40, 40, { multiplier: "Double" }, "Double out")); console.assert(isFinished(21, 21, { multiplier: "Treble" }, "Triple out")); console.assert(getScoringDarts([createThrow(20,"Single"), createThrow(16,"Double")], false, "Double in").scoringDarts.length === 1); console.assert(buildGameResult(["A", "B"], { A: { remaining: 0, finishedPlace: "1st" }, B: { remaining: 20 } })[0].points === 1); console.assert(buildScorecardRows([{ player: "A" }, { player: "B" }, { player: "A" }], ["A", "B"]).length === 2); }
 if (typeof window !== "undefined") runSelfTests();
 
@@ -169,64 +194,82 @@ export default function DartsGameApp() {
   const handleDrop = (target) => { if (!draggedPlayer || draggedPlayer === target) return; movePlayer(throwOrder.indexOf(draggedPlayer), throwOrder.indexOf(target)); setDraggedPlayer(null); };
   const confirmThrowOrder = () => { setScores(buildInitialScores(throwOrder, score, inRule, selectedMode)); resetTurnState(); setScreen("playing"); };
   const addThrow = (num, mult = multiplier) => setRoundInput((cur) => appendThrow(cur, createThrow(num, mult)));
-  const handleCricketHit = (target) => {
+  const submitCricketTurn = (darts) => {
     if (selectedMode !== "cricket" || !currentPlayer || scores[currentPlayer]?.finishedPlace) return;
-    const requiredTarget = getCricketTarget(currentScore);
-    if (!isCricketHit(target, requiredTarget)) return;
 
+    const beforeTarget = getCricketTarget(currentScore);
+    const live = getLiveCricketState(currentScore, darts);
     const existingFinished = Object.values(scores).filter((x) => x.finishedPlace).length;
-    const finished = requiredTarget === "Bull";
+    const finished = live.done;
     const finishedPlace = finished ? FINISHING_PLACES[existingFinished] || `${existingFinished + 1}th` : null;
-    const nextIndex = (currentScore.cricketIndex || 0) + 1;
-    const nextTarget = CRICKET_TARGETS[nextIndex] ?? 0;
+    const hitCount = darts.filter((dart) => dart.hit).length;
+    const lastHit = [...darts].reverse().find((dart) => dart.hit);
+
     const nextScores = {
       ...scores,
       [currentPlayer]: {
         ...currentScore,
-        remaining: finished ? 0 : nextTarget,
-        lastScore: target,
-        dartsThrown: currentScore.dartsThrown + 1,
-        totalScored: currentScore.totalScored + 1,
-        cricketIndex: nextIndex,
-        cricketClosed: [...(currentScore.cricketClosed || []), requiredTarget],
+        remaining: finished ? 0 : live.currentTarget,
+        lastScore: lastHit ? lastHit.label : "MISS",
+        dartsThrown: currentScore.dartsThrown + darts.length,
+        totalScored: currentScore.totalScored + hitCount,
+        cricketIndex: live.cricketIndex,
+        cricketClosed: live.closed,
         finishedPlace: finishedPlace || currentScore.finishedPlace,
       },
     };
+
     const turn = {
       id: `${Date.now()}-${currentPlayer}`,
       turn: turnHistory.length + 1,
       player: currentPlayer,
-      darts: [{ number: target, multiplier: "Cricket", value: 1, label: String(target) }],
-      total: 1,
-      attemptedTotal: 1,
-      result: finished ? finishedPlace : "OK",
-      before: requiredTarget,
-      after: finished ? "Done" : nextTarget,
+      darts,
+      total: hitCount,
+      attemptedTotal: darts.length,
+      result: finished ? finishedPlace : hitCount ? "OK" : "MISS",
+      before: beforeTarget,
+      after: finished ? "Done" : live.currentTarget,
     };
+
     const finishedIndexes = throwOrder.map((p, i) => nextScores[p]?.finishedPlace ? i : null).filter((i) => i !== null);
     setTurnHistory((cur) => [...cur, turn]);
     setScores(nextScores);
     setRoundInput([]);
+
     if (finishedIndexes.length >= throwOrder.length) { setScreen("result"); return; }
     setCurrentIndex((i) => getNextIndex(i, throwOrder.length, finishedIndexes));
   };
+
+  const handleCricketHit = (target) => {
+    if (selectedMode !== "cricket" || !currentPlayer || scores[currentPlayer]?.finishedPlace) return;
+    setRoundInput((current) => {
+      if (current.length >= 3) return current;
+      const live = getLiveCricketState(currentScore, current);
+      const dart = createCricketThrow(target, live.currentTarget);
+      const next = [...current, dart];
+
+      if (next.length >= 3 || getLiveCricketState(currentScore, next).done) {
+        setTimeout(() => submitCricketTurn(next), 0);
+      }
+
+      return next;
+    });
+  };
+
   const handleCricketMiss = () => {
     if (selectedMode !== "cricket" || !currentPlayer || scores[currentPlayer]?.finishedPlace) return;
-    const requiredTarget = getCricketTarget(currentScore);
-    const turn = {
-      id: `${Date.now()}-${currentPlayer}`,
-      turn: turnHistory.length + 1,
-      player: currentPlayer,
-      darts: [createMissThrow()],
-      total: 0,
-      attemptedTotal: 0,
-      result: "MISS",
-      before: requiredTarget,
-      after: requiredTarget,
-    };
-    const finishedIndexes = throwOrder.map((p, i) => scores[p]?.finishedPlace ? i : null).filter((i) => i !== null);
-    setTurnHistory((cur) => [...cur, turn]);
-    setCurrentIndex((i) => getNextIndex(i, throwOrder.length, finishedIndexes));
+    setRoundInput((current) => {
+      if (current.length >= 3) return current;
+      const live = getLiveCricketState(currentScore, current);
+      const miss = { ...createMissThrow(), requiredTarget: live.currentTarget, hit: false };
+      const next = [...current, miss];
+
+      if (next.length >= 3) {
+        setTimeout(() => submitCricketTurn(next), 0);
+      }
+
+      return next;
+    });
   };
   const submitRound = () => {
     if (!currentPlayer || scores[currentPlayer]?.finishedPlace) return;
@@ -268,43 +311,55 @@ function PlayingScreen(props) {
 }
 function CricketPlayingScreen(props) {
   const land = props.layout === "landscape";
-  const requiredTarget = getCricketTarget(props.currentScore);
+  const live = getLiveCricketState(props.currentScore, props.roundInput);
+  const requiredTarget = live.currentTarget;
   return (
     <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}>
       <Header title="Cricket" onBack={props.onBack} right={<PlayingHeaderActions {...props}/>} />
       <div className={land ? "grid grid-cols-[0.9fr_1.1fr] gap-5" : "space-y-5"}>
         <div>
-          <CricketScoreList {...props} />
+          <CricketScoreList {...props} liveCricket={live} />
           <h2 className="mb-5 truncate whitespace-nowrap text-center text-[26px] font-black uppercase leading-none text-[#ff5a3a]">{props.currentPlayer}{TEXT.turn}</h2>
           <section className="rounded-[28px] bg-white p-4 text-center text-black shadow-xl">
             <div className="text-sm font-black uppercase text-black/50">Current target</div>
-            <div className="text-[64px] font-black leading-none">{requiredTarget === "Bull" ? "BULL" : requiredTarget}</div>
-            <div className="mt-2 text-sm font-bold text-black/50">{requiredTarget === "Bull" ? "Finish with Bull or Outer" : "Tap the matching sector on the board"}</div>
+            <div className="text-[64px] font-black leading-none">{requiredTarget === "Bull" ? "BULL / OUTER" : requiredTarget}</div>
+            <div className="mt-2 text-sm font-bold text-black/50">{requiredTarget === "Bull" ? "3 tries to finish with Bull or Outer" : "3 darts per turn. Tap matching sectors on the board."}</div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {[0,1,2].map((index) => <DartMini key={index} dart={props.roundInput[index]} />)}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button onClick={props.onUndo} className="rounded-2xl bg-black/10 py-4 text-3xl font-black text-black/70">↩</button>
+              <button onClick={props.onMiss} className="rounded-2xl bg-[#10231b] py-4 text-2xl font-black uppercase text-white">Miss</button>
+            </div>
           </section>
         </div>
-        <CricketBoard currentScore={props.currentScore} onHit={props.onCricketHit} onMiss={props.onMiss} />
+        <CricketBoard currentScore={props.currentScore} roundInput={props.roundInput} onHit={props.onCricketHit} />
       </div>
     </motion.div>
   );
 }
-function CricketScoreList({ throwOrder, scores, currentPlayer }) {
+function CricketScoreList({ throwOrder, scores, currentPlayer, liveCricket }) {
   return (
     <section className="mb-5 overflow-hidden rounded-[28px] bg-[#ff9f23] p-3 shadow-xl">
       <div className="space-y-1">
         {throwOrder.map((player) => {
           const s = scores[player] || { ...PLAYER_TEMPLATE, remaining: 20, cricketIndex: 0, cricketClosed: [] };
           const active = player === currentPlayer;
+          const activeClosed = active ? liveCricket.closed : (s.cricketClosed || []);
+          const activeTarget = active ? liveCricket.currentTarget : getCricketTarget(s);
           return (
             <div key={player} className={cx("rounded-[22px] transition", active ? "bg-[#ff5a3a] p-4" : "bg-[#ff9f23] px-4 py-2")}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3"><Avatar name={player} active size={active?"sm":"xs"}/><span className={cx(active?"text-xl":"text-lg","font-black uppercase")}>{player}</span></div>
-                <div className="text-xl font-black text-white">{s.finishedPlace || getCricketProgressLabel(s)}</div>
+                <div className="text-xl font-black text-white">{s.finishedPlace || (activeTarget === "Bull" ? "Bull / Outer" : activeTarget || "Done")}</div>
               </div>
               {active && (
                 <div className="mt-3 grid grid-cols-7 gap-1">
                   {CRICKET_TARGETS.map((target) => {
-                    const closed = (s.cricketClosed || []).includes(target);
-                    const current = getCricketTarget(s) === target;
+                    const closed = activeClosed.includes(target);
+                    const current = activeTarget === target;
                     return <div key={target} className={cx("rounded-lg px-1 py-1 text-center text-[11px] font-black", closed ? "bg-[#10231b] text-[#ff5a3a] shadow-[0_0_12px_rgba(255,90,58,0.85)]" : current ? "bg-orange-400 text-black shadow-[0_0_14px_rgba(251,146,60,0.9)]" : "bg-black/15 text-white/40")}>{target}</div>
                   })}
                 </div>
@@ -316,19 +371,22 @@ function CricketScoreList({ throwOrder, scores, currentPlayer }) {
     </section>
   );
 }
-function CricketBoard({ currentScore, onHit, onMiss }) {
-  const requiredTarget = getCricketTarget(currentScore);
-  const closed = currentScore.cricketClosed || [];
+function CricketBoard({ currentScore, roundInput, onHit }) {
+  const live = getLiveCricketState(currentScore, roundInput);
+  const requiredTarget = live.currentTarget;
+  const closed = live.closed || [];
   return (
     <section className="rounded-[28px] bg-[#0b1a14]/95 p-4 shadow-xl">
-      <div className="relative mx-auto aspect-square max-w-[520px] rounded-full border-[14px] border-[#1d2e25] bg-[#07130f]">
-        <div className="absolute left-1/2 top-1/2 h-[74%] w-[74%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
-        <div className="absolute left-1/2 top-1/2 h-[48%] w-[48%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
+      <div className="relative mx-auto aspect-square max-w-[520px] overflow-hidden rounded-full border-[14px] border-[#1d2e25] bg-[#07130f]">
+        <div className="absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
+        <div className="absolute left-1/2 top-1/2 h-[58%] w-[58%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
+        <div className="absolute left-1/2 top-1/2 h-[34%] w-[34%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
+
         {DARTBOARD_ORDER.map((number, index) => {
-          const angle = (index / DARTBOARD_ORDER.length) * Math.PI * 2 - Math.PI / 2;
-          const radius = 41;
-          const left = 50 + Math.cos(angle) * radius;
-          const top = 50 + Math.sin(angle) * radius;
+          const deg = (index / DARTBOARD_ORDER.length) * 360;
+          const labelAngle = (index / DARTBOARD_ORDER.length) * Math.PI * 2 - Math.PI / 2;
+          const left = 50 + Math.cos(labelAngle) * 39;
+          const top = 50 + Math.sin(labelAngle) * 39;
           const isClosed = closed.includes(number);
           const isCurrent = requiredTarget === number;
           return (
@@ -336,29 +394,58 @@ function CricketBoard({ currentScore, onHit, onMiss }) {
               key={number}
               onClick={() => onHit(number)}
               className={cx(
-                "absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-xl font-black transition",
-                isClosed ? "bg-[#ff5a3a] text-white shadow-[0_0_22px_rgba(255,90,58,0.95)]" : isCurrent ? "bg-orange-400 text-black shadow-[0_0_24px_rgba(251,146,60,0.95)] scale-110" : "bg-[#10231b] text-white/75 hover:bg-white/10"
+                "absolute left-1/2 top-1/2 h-1/2 w-[12.5%] origin-bottom -translate-x-1/2 -translate-y-full transition",
+                isClosed ? "bg-[#ff5a3a]/80 shadow-[0_0_28px_rgba(255,90,58,0.95)]" : isCurrent ? "bg-orange-400/85 shadow-[0_0_30px_rgba(251,146,60,0.95)]" : "bg-[#10231b]/90 hover:bg-white/10"
+              )}
+              style={{ transform: `translate(-50%, -100%) rotate(${deg}deg)`, clipPath: "polygon(50% 100%, 0 0, 100% 0)" }}
+              title={`Sector ${number}`}
+            >
+              <span className="sr-only">{number}</span>
+            </button>
+          );
+        })}
+
+        {DARTBOARD_ORDER.map((number, index) => {
+          const angle = (index / DARTBOARD_ORDER.length) * Math.PI * 2 - Math.PI / 2;
+          const left = 50 + Math.cos(angle) * 42;
+          const top = 50 + Math.sin(angle) * 42;
+          const isClosed = closed.includes(number);
+          const isCurrent = requiredTarget === number;
+          return (
+            <div
+              key={`label-${number}`}
+              className={cx(
+                "pointer-events-none absolute flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-lg font-black",
+                isClosed ? "bg-[#ff5a3a] text-white shadow-[0_0_18px_rgba(255,90,58,0.95)]" : isCurrent ? "bg-orange-400 text-black shadow-[0_0_18px_rgba(251,146,60,0.95)]" : "bg-[#07130f]/75 text-white"
               )}
               style={{ left: `${left}%`, top: `${top}%` }}
             >
               {number}
-            </button>
+            </div>
           );
         })}
+
+        <button
+          onClick={() => onHit("Outer")}
+          className={cx(
+            "absolute left-1/2 top-1/2 z-20 flex h-32 w-32 -translate-x-1/2 -translate-y-1/2 items-start justify-center rounded-full border-[18px] pt-2 text-xs font-black uppercase transition",
+            closed.includes("Bull") ? "border-[#ff5a3a] text-[#ff5a3a] shadow-[0_0_26px_rgba(255,90,58,1)]" : requiredTarget === "Bull" ? "border-orange-400 text-orange-300 shadow-[0_0_28px_rgba(251,146,60,1)]" : "border-[#d9f3ef] text-white/70"
+          )}
+          title="Outer"
+        >
+          Outer
+        </button>
+
         <button
           onClick={() => onHit("Bull")}
           className={cx(
-            "absolute left-1/2 top-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-sm font-black uppercase transition",
+            "absolute left-1/2 top-1/2 z-30 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-xs font-black uppercase transition",
             closed.includes("Bull") ? "bg-[#ff5a3a] text-white shadow-[0_0_24px_rgba(255,90,58,1)]" : requiredTarget === "Bull" ? "bg-orange-400 text-black shadow-[0_0_26px_rgba(251,146,60,1)]" : "bg-[#d9f3ef] text-black"
           )}
+          title="Bull"
         >
           Bull
         </button>
-      </div>
-      <div className="mt-5 grid grid-cols-3 gap-3">
-        <button onClick={onMiss} className="rounded-2xl bg-white/5 py-4 text-2xl font-black uppercase text-white">Miss</button>
-        <button onClick={() => onHit("Outer")} className="rounded-2xl bg-[#10231b] py-4 text-lg font-black text-white">Outer<span className="block text-sm text-white/55">finish</span></button>
-        <button onClick={() => onHit("Bull")} className="rounded-2xl bg-[#10231b] py-4 text-lg font-black text-white">Bull<span className="block text-sm text-white/55">finish</span></button>
       </div>
     </section>
   );
