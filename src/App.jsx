@@ -115,8 +115,90 @@ function PlayerScoreRow({ player, score, active, remaining, avg, outs }) { retur
 function ActivePlayerDetails({ score, remaining, avg, outs }) { return <div><div className="grid grid-cols-[0.9fr_1.1fr] gap-3"><div className="text-[70px] font-black leading-none text-white">{remaining}</div><div className="space-y-0 pt-1 text-sm font-bold leading-tight text-black"><Stat label={TEXT.avg} value={avg}/><Stat label={TEXT.last} value={score.lastScore??"-"}/><Stat label={TEXT.darts} value={score.dartsThrown}/></div></div><div className="mt-3 grid grid-cols-2 gap-2">{outs.length?outs.map((o)=><div key={o} className="whitespace-nowrap rounded-lg bg-[#10231b] px-3 py-2 text-center text-[12px] font-black tracking-tight text-white sm:text-sm">{o}</div>):<div className="col-span-2 rounded-lg bg-[#10231b] px-3 py-2 text-center text-sm font-black text-white">{TEXT.noOut}</div>}</div></div>; }
 function RoundInputBar({ roundInput, roundTotal, onSubmit }) { return <section className="mb-5 overflow-hidden rounded-[28px] bg-white shadow-xl"><div className="grid grid-cols-[70px_1fr_150px] items-center"><div className="flex h-20 flex-col items-center justify-center border-r border-black/10 text-black"><span className="text-2xl font-black">#</span><span className="text-sm font-black">{roundTotal}</span></div><div className="grid h-20 grid-cols-3 text-center text-black">{[0,1,2].map((i)=><DartSlot key={i} dart={roundInput[i]}/>)}</div><button onClick={onSubmit} className="m-3 rounded-[22px] bg-emerald-400 px-4 py-5 text-2xl font-black text-black hover:bg-emerald-300">{TEXT.submit}</button></div></section>; }
 function DartSlot({ dart }) { return <div className="flex flex-col items-center justify-center border-r border-black/10 last:border-r-0"><span className="text-3xl font-black">{dart?.value??""}</span><span className="text-sm font-bold">{dart?.label??""}</span></div>; }
-function DartPad({ multiplier, onMultiplier, onAddThrow, onUndo, onMiss }) { return <div><section className="mb-5"><div className="mb-5 grid grid-cols-5 border-b border-white/10 text-center text-base font-black text-white/85">{MULTIPLIERS.map((m)=><button key={m} onClick={()=>onMultiplier(m)} className={cx("pb-3",multiplier===m?"border-b-4 border-[#ff5a3a] text-white":"text-white/45")}>{m}</button>)}<BullButton label="Bull" value="50" onClick={()=>onAddThrow(25,"Bull")}/><BullButton label="Outer" value="25" onClick={()=>onAddThrow(25,"Outer")}/></div><div className="grid grid-cols-5 gap-y-5 text-center">{Array.from({length:20},(_,i)=>{const n=i+1; const value=getThrowValue(n,multiplier); return <button key={n} onClick={()=>onAddThrow(n)} className="py-2 text-white transition hover:scale-105"><span className="text-[52px] font-black leading-none">{n}</span>{multiplier!=="Single"&&<span className="ml-1 text-sm font-bold text-white/55">{value}</span>}</button>})}</div></section><section className="grid grid-cols-2 items-center border-t border-white/10 pt-5 text-center"><button onClick={onUndo} className="text-4xl text-white/70">↩</button><button onClick={onMiss} className="text-[40px] font-black uppercase text-white">{TEXT.miss}</button></section></div>; }
-function BullButton({ label, value, onClick }) { return <button onClick={onClick} className="pb-3 text-white/85"><span className="block">{label}</span><span className="block text-sm font-bold text-white/55">{value}</span></button>; }
+function DartPad({ onAddThrow, onUndo, onMiss }) {
+  return (
+    <div>
+      <section className="mb-5">
+        <div className="grid grid-cols-5 gap-3 text-center">
+          {Array.from({ length: 20 }, (_, index) => {
+            const number = index + 1;
+
+            return (
+              <div
+                key={number}
+                className="overflow-hidden rounded-[18px] bg-[#10231b] text-white shadow-lg"
+              >
+                <button
+                  onClick={() => onAddThrow(number, "Single")}
+                  className="w-full px-2 py-4 text-[42px] font-black leading-none hover:bg-white/10"
+                  title={`Single ${number}`}
+                >
+                  {number}
+                </button>
+
+                <div className="grid grid-cols-2 border-t border-white/10">
+                  <button
+                    onClick={() => onAddThrow(number, "Double")}
+                    className="px-2 py-2 text-sm font-black text-white/75 hover:bg-[#ff5a3a] hover:text-white"
+                    title={`Double ${number} = ${number * 2}`}
+                  >
+                    D
+                    <span className="ml-1 hidden text-xs opacity-80 sm:inline">
+                      {number * 2}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => onAddThrow(number, "Treble")}
+                    className="border-l border-white/10 px-2 py-2 text-sm font-black text-white/75 hover:bg-[#ff5a3a] hover:text-white"
+                    title={`Treble ${number} = ${number * 3}`}
+                  >
+                    T
+                    <span className="ml-1 hidden text-xs opacity-80 sm:inline">
+                      {number * 3}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="grid grid-cols-4 items-center gap-2 border-t border-white/10 pt-5 text-center">
+        <button
+          onClick={onUndo}
+          className="rounded-2xl bg-white/5 py-4 text-4xl text-white/70"
+        >
+          ↩
+        </button>
+
+        <button
+          onClick={onMiss}
+          className="rounded-2xl bg-white/5 py-4 text-2xl font-black uppercase text-white"
+        >
+          {TEXT.miss}
+        </button>
+
+        <button
+          onClick={() => onAddThrow(25, "Outer")}
+          className="rounded-2xl bg-[#10231b] py-4 text-lg font-black text-white"
+        >
+          Outer
+          <span className="block text-sm text-white/55">25</span>
+        </button>
+
+        <button
+          onClick={() => onAddThrow(25, "Bull")}
+          className="rounded-2xl bg-[#10231b] py-4 text-lg font-black text-white"
+        >
+          Bull
+          <span className="block text-sm text-white/55">50</span>
+        </button>
+      </section>
+    </div>
+  );
+}
 function LayoutIcon({ target }) { return <span className={cx("block rounded-[6px] border-2 border-white",target==="landscape"?"h-4 w-7":"h-7 w-4")} aria-hidden="true"/>; }
 function ScorecardScreen({ players, turnHistory, onBack }) { const rows=buildScorecardRows(turnHistory,players); return <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}><Header title={TEXT.scorecard} onBack={onBack}/><section className="rounded-[24px] bg-[#11271d]/95 p-4 shadow-xl">{!turnHistory.length?<div className="rounded-2xl bg-white/10 p-5 text-center font-bold text-white/60">{TEXT.noTurns}</div>:<div className="overflow-x-auto"><div className="min-w-[760px]"><div className="grid gap-2" style={{gridTemplateColumns:`72px repeat(${players.length}, minmax(150px, 1fr))`}}><ScorecardHeaderCell>{TEXT.set}</ScorecardHeaderCell>{players.map((p)=><PlayerHeader key={p} player={p}/>)}{rows.map((r)=><ScorecardRow key={r.round} row={r} players={players}/>)}</div></div></div>}</section></motion.div>; }
 function ScorecardRow({ row, players }) { return <React.Fragment><div className="flex items-center justify-center rounded-2xl bg-[#0b1a14] px-2 py-4 text-center text-white"><div><div className="text-xs font-bold uppercase text-white/55">{TEXT.set}</div><div className="text-2xl font-black leading-none">{row.round}</div></div></div>{row.cells.map((cell,i)=><ScorecardCell key={`${row.round}-${players[i]}`} cell={cell}/>)}</React.Fragment>; }
