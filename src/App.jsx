@@ -433,21 +433,18 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
         <button
           onClick={() => onHit("Outer")}
           className={cx(
-            "absolute left-1/2 top-1/2 z-20 flex h-[112px] w-[112px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[18px] text-[11px] font-black uppercase transition",
-            closed.includes("Bull") ? "border-[#ff5a3a] text-[#ff5a3a] shadow-[0_0_26px_rgba(255,90,58,1)]" : outerActive ? "border-orange-400 text-orange-300 shadow-[0_0_28px_rgba(251,146,60,1)]" : "border-[#d9f3ef] text-[#d9f3ef]"
+            "absolute left-1/2 top-1/2 z-20 flex h-[86px] w-[86px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[13px] text-[0px] font-black uppercase transition",
+            closed.includes("Bull") ? "border-[#ff5a3a] shadow-[0_0_24px_rgba(255,90,58,1)]" : outerActive ? "border-orange-400 shadow-[0_0_26px_rgba(251,146,60,1)]" : "border-[#d9f3ef]"
           )}
           title="Outer"
-        >
-          <span className="-translate-y-[34px] rounded-full bg-[#07130f]/90 px-2 py-0.5 tracking-wide">
-            Outer
-          </span>
-        </button>
+          aria-label="Outer"
+        />
 
         <button
           onClick={() => onHit("Bull")}
           className={cx(
-            "absolute left-1/2 top-1/2 z-30 flex h-[74px] w-[74px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#07130f] text-xs font-black uppercase transition",
-            closed.includes("Bull") ? "bg-[#ff5a3a] text-white shadow-[0_0_24px_rgba(255,90,58,1)]" : bullActive ? "bg-orange-400 text-black shadow-[0_0_26px_rgba(251,146,60,1)]" : "bg-[#d9f3ef] text-black"
+            "absolute left-1/2 top-1/2 z-30 flex h-[42px] w-[42px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#07130f] text-[9px] font-black uppercase transition",
+            closed.includes("Bull") ? "bg-[#ff5a3a] text-white shadow-[0_0_22px_rgba(255,90,58,1)]" : bullActive ? "bg-orange-400 text-black shadow-[0_0_24px_rgba(251,146,60,1)]" : "bg-[#d9f3ef] text-black"
           )}
           title="Bull"
         >
