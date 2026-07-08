@@ -12,7 +12,6 @@ const MODES = [
   { id: "match", title: "Match", subtitle: "Classic x01 match" },
   { id: "cricket", title: "Cricket", subtitle: "Cricket / Tactics" },
   { id: "clockwise", title: "Clockwise", subtitle: "Around the clock" },
-  { id: "checkout", title: "121 Checkout", subtitle: "Checkout training" },
 ];
 const TEXT = {
   newGame: "New Game", orientation: "Layout", portrait: "Portrait", landscape: "Landscape", players: "Player details",
