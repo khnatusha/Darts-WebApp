@@ -375,29 +375,33 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
   const live = getLiveCricketState(currentScore, roundInput);
   const requiredTarget = live.currentTarget;
   const closed = live.closed || [];
+  const outerActive = requiredTarget === "Bull";
+  const bullActive = requiredTarget === "Bull";
+
   return (
     <section className="rounded-[28px] bg-[#0b1a14]/95 p-4 shadow-xl">
       <div className="relative mx-auto aspect-square max-w-[520px] overflow-hidden rounded-full border-[14px] border-[#1d2e25] bg-[#07130f]">
         <div className="absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
         <div className="absolute left-1/2 top-1/2 h-[58%] w-[58%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
-        <div className="absolute left-1/2 top-1/2 h-[34%] w-[34%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
+        <div className="absolute left-1/2 top-1/2 h-[36%] w-[36%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
 
         {DARTBOARD_ORDER.map((number, index) => {
           const deg = (index / DARTBOARD_ORDER.length) * 360;
-          const labelAngle = (index / DARTBOARD_ORDER.length) * Math.PI * 2 - Math.PI / 2;
-          const left = 50 + Math.cos(labelAngle) * 39;
-          const top = 50 + Math.sin(labelAngle) * 39;
           const isClosed = closed.includes(number);
           const isCurrent = requiredTarget === number;
+
           return (
             <button
               key={number}
               onClick={() => onHit(number)}
               className={cx(
                 "absolute left-1/2 top-1/2 h-1/2 w-[12.5%] origin-bottom -translate-x-1/2 -translate-y-full transition",
-                isClosed ? "bg-[#ff5a3a]/80 shadow-[0_0_28px_rgba(255,90,58,0.95)]" : isCurrent ? "bg-orange-400/85 shadow-[0_0_30px_rgba(251,146,60,0.95)]" : "bg-[#10231b]/90 hover:bg-white/10"
+                isClosed ? "bg-[#ff5a3a]/78 shadow-[0_0_28px_rgba(255,90,58,0.95)]" : isCurrent ? "bg-orange-400/85 shadow-[0_0_30px_rgba(251,146,60,0.95)]" : "bg-[#10231b]/90 hover:bg-white/10"
               )}
-              style={{ transform: `translate(-50%, -100%) rotate(${deg}deg)`, clipPath: "polygon(50% 100%, 0 0, 100% 0)" }}
+              style={{
+                transform: `translate(-50%, -100%) rotate(${deg}deg)`,
+                clipPath: "polygon(50% 100%, 0 0, 100% 0)",
+              }}
               title={`Sector ${number}`}
             >
               <span className="sr-only">{number}</span>
@@ -411,6 +415,7 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
           const top = 50 + Math.sin(angle) * 42;
           const isClosed = closed.includes(number);
           const isCurrent = requiredTarget === number;
+
           return (
             <div
               key={`label-${number}`}
@@ -428,19 +433,21 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
         <button
           onClick={() => onHit("Outer")}
           className={cx(
-            "absolute left-1/2 top-1/2 z-20 flex h-32 w-32 -translate-x-1/2 -translate-y-1/2 items-start justify-center rounded-full border-[18px] pt-2 text-xs font-black uppercase transition",
-            closed.includes("Bull") ? "border-[#ff5a3a] text-[#ff5a3a] shadow-[0_0_26px_rgba(255,90,58,1)]" : requiredTarget === "Bull" ? "border-orange-400 text-orange-300 shadow-[0_0_28px_rgba(251,146,60,1)]" : "border-[#d9f3ef] text-white/70"
+            "absolute left-1/2 top-1/2 z-20 flex h-[112px] w-[112px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[18px] text-[11px] font-black uppercase transition",
+            closed.includes("Bull") ? "border-[#ff5a3a] text-[#ff5a3a] shadow-[0_0_26px_rgba(255,90,58,1)]" : outerActive ? "border-orange-400 text-orange-300 shadow-[0_0_28px_rgba(251,146,60,1)]" : "border-[#d9f3ef] text-[#d9f3ef]"
           )}
           title="Outer"
         >
-          Outer
+          <span className="-translate-y-[34px] rounded-full bg-[#07130f]/90 px-2 py-0.5 tracking-wide">
+            Outer
+          </span>
         </button>
 
         <button
           onClick={() => onHit("Bull")}
           className={cx(
-            "absolute left-1/2 top-1/2 z-30 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-xs font-black uppercase transition",
-            closed.includes("Bull") ? "bg-[#ff5a3a] text-white shadow-[0_0_24px_rgba(255,90,58,1)]" : requiredTarget === "Bull" ? "bg-orange-400 text-black shadow-[0_0_26px_rgba(251,146,60,1)]" : "bg-[#d9f3ef] text-black"
+            "absolute left-1/2 top-1/2 z-30 flex h-[74px] w-[74px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#07130f] text-xs font-black uppercase transition",
+            closed.includes("Bull") ? "bg-[#ff5a3a] text-white shadow-[0_0_24px_rgba(255,90,58,1)]" : bullActive ? "bg-orange-400 text-black shadow-[0_0_26px_rgba(251,146,60,1)]" : "bg-[#d9f3ef] text-black"
           )}
           title="Bull"
         >
