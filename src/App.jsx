@@ -375,8 +375,7 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
   const live = getLiveCricketState(currentScore, roundInput);
   const requiredTarget = live.currentTarget;
   const closed = live.closed || [];
-  const outerActive = requiredTarget === "Bull";
-  const bullActive = requiredTarget === "Bull";
+  const bullTargetActive = requiredTarget === "Bull";
 
   return (
     <section className="rounded-[28px] bg-[#0b1a14]/95 p-4 shadow-xl">
@@ -389,19 +388,27 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
           const deg = (index / DARTBOARD_ORDER.length) * 360;
           const isClosed = closed.includes(number);
           const isCurrent = requiredTarget === number;
+          const sectorStyle = {
+            transform: `translate(-50%, -100%) rotate(${deg}deg)`,
+            clipPath: "polygon(50% 100%, 0 0, 100% 0)",
+            backgroundColor: isClosed
+              ? "rgba(255, 90, 58, 0.82)"
+              : isCurrent
+                ? "rgba(251, 146, 60, 0.88)"
+                : "rgba(16, 35, 27, 0.9)",
+            filter: isClosed
+              ? "drop-shadow(0 0 16px rgba(255, 90, 58, 1))"
+              : isCurrent
+                ? "drop-shadow(0 0 18px rgba(251, 146, 60, 1))"
+                : "none",
+          };
 
           return (
             <button
               key={number}
               onClick={() => onHit(number)}
-              className={cx(
-                "absolute left-1/2 top-1/2 h-1/2 w-[12.5%] origin-bottom -translate-x-1/2 -translate-y-full transition",
-                isClosed ? "bg-[#ff5a3a]/78 shadow-[0_0_28px_rgba(255,90,58,0.95)]" : isCurrent ? "bg-orange-400/85 shadow-[0_0_30px_rgba(251,146,60,0.95)]" : "bg-[#10231b]/90 hover:bg-white/10"
-              )}
-              style={{
-                transform: `translate(-50%, -100%) rotate(${deg}deg)`,
-                clipPath: "polygon(50% 100%, 0 0, 100% 0)",
-              }}
+              className="absolute left-1/2 top-1/2 h-1/2 w-[12.5%] origin-bottom -translate-x-1/2 -translate-y-full transition hover:bg-white/10"
+              style={sectorStyle}
               title={`Sector ${number}`}
             >
               <span className="sr-only">{number}</span>
@@ -421,7 +428,7 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
               key={`label-${number}`}
               className={cx(
                 "pointer-events-none absolute flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-lg font-black",
-                isClosed ? "bg-[#ff5a3a] text-white shadow-[0_0_18px_rgba(255,90,58,0.95)]" : isCurrent ? "bg-orange-400 text-black shadow-[0_0_18px_rgba(251,146,60,0.95)]" : "bg-[#07130f]/75 text-white"
+                isClosed ? "bg-[#ff5a3a] text-white shadow-[0_0_20px_rgba(255,90,58,1)]" : isCurrent ? "bg-orange-400 text-black shadow-[0_0_18px_rgba(251,146,60,0.95)]" : "bg-[#07130f]/75 text-white"
               )}
               style={{ left: `${left}%`, top: `${top}%` }}
             >
@@ -433,8 +440,8 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
         <button
           onClick={() => onHit("Outer")}
           className={cx(
-            "absolute left-1/2 top-1/2 z-20 flex h-[86px] w-[86px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[13px] text-[0px] font-black uppercase transition",
-            closed.includes("Bull") ? "border-[#ff5a3a] shadow-[0_0_24px_rgba(255,90,58,1)]" : outerActive ? "border-orange-400 shadow-[0_0_26px_rgba(251,146,60,1)]" : "border-[#d9f3ef]"
+            "absolute left-1/2 top-1/2 z-20 h-[78px] w-[78px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[14px] transition",
+            closed.includes("Bull") ? "border-[#ff5a3a] shadow-[0_0_24px_rgba(255,90,58,1)]" : bullTargetActive ? "border-orange-400 shadow-[0_0_26px_rgba(251,146,60,1)]" : "border-[#d9f3ef]"
           )}
           title="Outer"
           aria-label="Outer"
@@ -443,8 +450,8 @@ function CricketBoard({ currentScore, roundInput, onHit }) {
         <button
           onClick={() => onHit("Bull")}
           className={cx(
-            "absolute left-1/2 top-1/2 z-30 flex h-[42px] w-[42px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#07130f] text-[9px] font-black uppercase transition",
-            closed.includes("Bull") ? "bg-[#ff5a3a] text-white shadow-[0_0_22px_rgba(255,90,58,1)]" : bullActive ? "bg-orange-400 text-black shadow-[0_0_24px_rgba(251,146,60,1)]" : "bg-[#d9f3ef] text-black"
+            "absolute left-1/2 top-1/2 z-30 flex h-[50px] w-[50px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#07130f] text-[9px] font-black uppercase transition",
+            closed.includes("Bull") ? "bg-[#ff5a3a] text-white shadow-[0_0_22px_rgba(255,90,58,1)]" : bullTargetActive ? "bg-orange-400 text-black shadow-[0_0_24px_rgba(251,146,60,1)]" : "bg-[#d9f3ef] text-black"
           )}
           title="Bull"
         >
